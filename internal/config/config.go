@@ -51,23 +51,23 @@ type Config struct {
 	} `mapstructure:"task"`
 	// Legacy single server config for backward compatibility
 	Rcon struct {
-		Address   string `mapstructure:"address"`
-		Password  string `mapstructure:"password"`
-		UseBase64 bool   `mapstructure:"use_base64"`
-		Timeout   int    `mapstructure:"timeout"`
+		Address   string `mapstructure:"address" json:"address"`
+		Password  string `mapstructure:"password" json:"password"`
+		UseBase64 bool   `mapstructure:"use_base64" json:"use_base64"`
+		Timeout   int    `mapstructure:"timeout" json:"timeout"`
 	} `mapstructure:"rcon"`
 	Rest struct {
-		Address  string `mapstructure:"address"`
-		Username string `mapstructure:"username"`
-		Password string `mapstructure:"password"`
-		Timeout  int    `mapstructure:"timeout"`
+		Address  string `mapstructure:"address" json:"address"`
+		Username string `mapstructure:"username" json:"username"`
+		Password string `mapstructure:"password" json:"password"`
+		Timeout  int    `mapstructure:"timeout" json:"timeout"`
 	} `mapstructure:"rest"`
 	Save struct {
-		Path           string `mapstructure:"path"`
-		DecodePath     string `mapstructure:"decode_path"`
-		SyncInterval   int    `mapstructure:"sync_interval"`
-		BackupInterval int    `mapstructure:"backup_interval"`
-		BackupKeepDays int    `mapstructure:"backup_keep_days"`
+		Path           string `mapstructure:"path" json:"path"`
+		DecodePath     string `mapstructure:"decode_path" json:"decode_path"`
+		SyncInterval   int    `mapstructure:"sync_interval" json:"sync_interval"`
+		BackupInterval int    `mapstructure:"backup_interval" json:"backup_interval"`
+		BackupKeepDays int    `mapstructure:"backup_keep_days" json:"backup_keep_days"`
 	} `mapstructure:"save"`
 	Manage struct {
 		KickNonWhitelist bool `mapstructure:"kick_non_whitelist"`
