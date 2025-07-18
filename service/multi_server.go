@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/zaigie/palworld-server-tool/internal/database"
 	"go.etcd.io/bbolt"
@@ -400,4 +401,96 @@ func AddBackupByServer(db *bbolt.DB, serverId string, backup database.Backup) er
 		key := fmt.Sprintf("%s_%s", serverId, backup.BackupId)
 		return b.Put([]byte(key), data)
 	})
+}
+
+// PutWhitelistByServer stores whitelist for a specific server
+func PutWhitelistByServer(db *bbolt.DB, serverId string, players []database.PlayerW) error {
+	return db.Update(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte("whitelist"))
+		if b == nil {
+			var err error
+			b, err = tx.CreateBucket([]byte("whitelist"))
+			if err != nil {
+				return err
+			}
+		}
+
+		// Clear existing whitelist for this server
+		c := b.Cursor()
+		prefix := []byte(fmt.Sprintf("%s_", serverId))
+		for k, _ := c.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); k, _ = c.Next() {
+			c.Delete()
+		}
+
+		// Add new whitelist players
+		for _, player := range players {
+			player.ServerId = serverId
+			data, err := json.Marshal(player)
+			if err != nil {
+				return err
+			}
+
+			key := fmt.Sprintf("%s_%s", serverId, player.PlayerUID)
+			if player.PlayerUID == "" {
+				key = fmt.Sprintf("%s_%s", serverId, player.SteamID)
+			}
+			if err := b.Put([]byte(key), data); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+}
+
+// PutRconCommandByServer updates an RCON command for a specific server
+func PutRconCommandByServer(db *bbolt.DB, serverId, uuid string, command database.RconCommandList) error {
+	return db.Update(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte("rcon_commands"))
+		if b == nil {
+			var err error
+			b, err = tx.CreateBucket([]byte("rcon_commands"))
+			if err != nil {
+				return err
+			}
+		}
+
+		command.ServerId = serverId
+		command.UUID = uuid
+		data, err := json.Marshal(command)
+		if err != nil {
+			return err
+		}
+
+		key := fmt.Sprintf("%s_%s", serverId, uuid)
+		return b.Put([]byte(key), data)
+	})
+}
+
+// ListBackupsByServerWithTimeRange returns backups for a specific server within a time range
+func ListBackupsByServerWithTimeRange(db *bbolt.DB, serverId string, startTime, endTime time.Time) ([]database.Backup, error) {
+	var backups []database.Backup
+	err := db.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte("backups"))
+		if b == nil {
+			return nil
+		}
+
+		return b.ForEach(func(k, v []byte) error {
+			var backup database.Backup
+			if err := json.Unmarshal(v, &backup); err != nil {
+				return err
+			}
+			// Filter by server ID and time range
+			if backup.ServerId == serverId {
+				backupTime := backup.SaveTime
+				if (startTime.IsZero() || backupTime.After(startTime)) &&
+					(endTime.IsZero() || backupTime.Before(endTime)) {
+					backups = append(backups, backup)
+				}
+			}
+			return nil
+		})
+	})
+	return backups, err
 }
