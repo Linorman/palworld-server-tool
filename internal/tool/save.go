@@ -103,7 +103,7 @@ func Decode(file string) error {
 }
 
 func DecodeWithConfig(server *config.Server, file string) error {
-	savCli, err := getSavCliWithConfig(server)
+	_, err := getSavCliWithConfig(server)
 	if err != nil {
 		return errors.New("error getting executable path: " + err.Error())
 	}

@@ -296,3 +296,62 @@ func getScheduler() gocron.Scheduler {
 	}
 	return s
 }
+
+// PlayerSyncByServer synchronizes player data for a specific server
+func PlayerSyncByServer(db *bbolt.DB, serverId string) {
+	logger.Infof("Syncing players for server %s...\n", serverId)
+
+	server, exists := config.GetServer(serverId)
+	if !exists {
+		logger.Errorf("Server %s not found\n", serverId)
+		return
+	}
+
+	onlinePlayers, err := tool.ShowPlayersWithConfig(server)
+	if err != nil {
+		logger.Errorf("Failed to get online players for server %s: %v\n", serverId, err)
+		return
+	}
+
+	err = service.PutPlayersOnlineByServer(db, serverId, onlinePlayers)
+	if err != nil {
+		logger.Errorf("Failed to save online players for server %s: %v\n", serverId, err)
+		return
+	}
+
+	logger.Infof("Player sync done for server %s\n", serverId)
+
+	playerLogging := viper.GetBool("task.player_logging")
+	if playerLogging {
+		go PlayerLoggingByServer(server, onlinePlayers)
+	}
+
+	kickInterval := viper.GetBool("manage.kick_non_whitelist")
+	if kickInterval {
+		go CheckAndKickPlayersByServer(db, server, onlinePlayers)
+	}
+}
+
+// SavSyncByServer synchronizes save data for a specific server
+func SavSyncByServer(serverId string) {
+	logger.Infof("Syncing save for server %s...\n", serverId)
+
+	server, exists := config.GetServer(serverId)
+	if !exists {
+		logger.Errorf("Server %s not found\n", serverId)
+		return
+	}
+
+	if server.Save.Path == "" {
+		logger.Warnf("Save path not configured for server %s, skipping\n", serverId)
+		return
+	}
+
+	err := tool.DecodeWithConfig(server, server.Save.Path)
+	if err != nil {
+		logger.Errorf("Failed to decode save for server %s: %v\n", serverId, err)
+		return
+	}
+
+	logger.Infof("Sav sync done for server %s\n", serverId)
+}
