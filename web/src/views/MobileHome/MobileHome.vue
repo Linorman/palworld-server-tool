@@ -636,7 +636,7 @@ onMounted(async () => {
   </n-modal>
 </template>
 <style scoped lang="less">
-:deep .n-layout-scroll-container {
+:deep(.n-layout-scroll-container) {
   &::-webkit-scrollbar {
     display: none;
   }

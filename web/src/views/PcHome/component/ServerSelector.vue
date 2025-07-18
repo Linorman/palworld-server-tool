@@ -50,7 +50,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, h } from 'vue';
 import { NSelect, NButton, NModal, NSpace, NIcon, NTag } from 'naive-ui';
-import { ServerOutlined, SettingsOutlined } from '@vicons/antd';
+import { DeploymentUnitOutlined, SettingOutlined } from '@vicons/antd';
 import serverStore from '@/stores/model/server';
 import userStore from '@/stores/model/user';
 import ApiService from '@/service/api';

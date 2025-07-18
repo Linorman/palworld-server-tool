@@ -7,7 +7,7 @@
         <n-button type="primary" @click="showAddModal = true">
           <template #icon>
             <n-icon>
-              <add-outlined />
+              <plus-outlined />
             </n-icon>
           </template>
           添加服务器
@@ -57,7 +57,7 @@
 <script setup>
 import { ref, computed, onMounted, h } from 'vue';
 import { NDataTable, NH3, NButton, NModal, NSpace, NIcon, NTag, NPopconfirm } from 'naive-ui';
-import { AddOutlined, EditOutlined, DeleteOutlined } from '@vicons/antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined } from '@vicons/antd';
 import serverStore from '@/stores/model/server';
 import ApiService from '@/service/api';
 import { useMessage } from 'naive-ui';

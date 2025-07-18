@@ -40,7 +40,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { NSpace, NIcon, NTag, NTooltip, NText } from 'naive-ui';
-import { ServerOutlined } from '@vicons/antd';
+import { DeploymentUnitOutlined } from '@vicons/antd';
 import serverStore from '@/stores/model/server';
 import ApiService from '@/service/api';
 

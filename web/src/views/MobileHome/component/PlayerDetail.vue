@@ -156,9 +156,9 @@ const getPalName = (name) => {
 };
 const getUnknowPalAvatar = (is_boss = false) => {
   if (is_boss) {
-    return new URL("@/assets/pals/boss_unknown.png", import.meta.url).href;
+    return new URL(/* @vite-ignore */ "@/assets/pals/boss_unknown.png", import.meta.url).href;
   }
-  return new URL("@/assets/pals/unknown.png", import.meta.url).href;
+  return new URL(/* @vite-ignore */ "@/assets/pals/unknown.png", import.meta.url).href;
 };
 
 onMounted(async () => {
