@@ -25,6 +25,7 @@ type Pal struct {
 }
 
 type OnlinePlayer struct {
+	ServerId   string    `json:"server_id"`
 	PlayerUid  string    `json:"player_uid"`
 	SteamId    string    `json:"steam_id"`
 	Nickname   string    `json:"nickname"`
@@ -42,6 +43,7 @@ type GuildPlayer struct {
 }
 
 type TersePlayer struct {
+	ServerId       string           `json:"server_id"`
 	PlayerUid      string           `json:"player_uid"`
 	Nickname       string           `json:"nickname"`
 	Level          int32            `json:"level"`
@@ -71,6 +73,7 @@ type BaseCamp struct {
 }
 
 type Guild struct {
+	ServerId       string         `json:"server_id"`
 	Name           string         `json:"name"`
 	BaseCampLevel  int32          `json:"base_camp_level"`
 	AdminPlayerUid string         `json:"admin_player_uid"`
@@ -79,6 +82,7 @@ type Guild struct {
 }
 
 type PlayerW struct {
+	ServerId  string `json:"server_id"`
 	Name      string `json:"name"`
 	SteamID   string `json:"steam_id"`
 	PlayerUID string `json:"player_uid"`
@@ -91,7 +95,8 @@ type RconCommand struct {
 }
 
 type RconCommandList struct {
-	UUID string `json:"uuid"`
+	ServerId string `json:"server_id"`
+	UUID     string `json:"uuid"`
 	RconCommand
 }
 
@@ -111,7 +116,19 @@ type Item struct {
 }
 
 type Backup struct {
+	ServerId string    `json:"server_id"`
 	BackupId string    `json:"backup_id"`
 	SaveTime time.Time `json:"save_time"`
 	Path     string    `json:"path"`
+}
+
+// ServerInfo represents stored server configuration and status
+type ServerInfo struct {
+	Id          string                 `json:"id"`
+	Name        string                 `json:"name"`
+	Description string                 `json:"description"`
+	Enabled     bool                   `json:"enabled"`
+	Status      string                 `json:"status"` // online, offline, error
+	LastCheck   time.Time              `json:"last_check"`
+	Config      map[string]interface{} `json:"config"`
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/zaigie/palworld-server-tool/internal/config"
 	"github.com/zaigie/palworld-server-tool/internal/database"
 	"github.com/zaigie/palworld-server-tool/internal/system"
 
@@ -23,53 +24,72 @@ import (
 var s gocron.Scheduler
 
 func BackupTask(db *bbolt.DB) {
-	logger.Info("Scheduling backup...\n")
-	path, err := tool.Backup()
-	if err != nil {
-		logger.Errorf("%v\n", err)
-		return
-	}
-	err = service.AddBackup(db, database.Backup{
-		BackupId: uuid.New().String(),
-		Path:     path,
-		SaveTime: time.Now(),
-	})
-	if err != nil {
-		logger.Errorf("%v\n", err)
-		return
-	}
-	logger.Infof("Auto backup to %s\n", path)
+	logger.Info("Scheduling backup for all servers...\n")
 
-	keepDays := viper.GetInt("save.backup_keep_days")
-	if keepDays == 0 {
-		keepDays = 7
-	}
-	err = tool.CleanOldBackups(db, keepDays)
-	if err != nil {
-		logger.Errorf("Failed to clean old backups: %v\n", err)
+	servers := config.GetEnabledServers()
+	for _, server := range servers {
+		logger.Infof("Backing up server %s (%s)...\n", server.Name, server.Id)
+
+		path, err := tool.BackupWithConfig(&server)
+		if err != nil {
+			logger.Errorf("Backup failed for server %s: %v\n", server.Id, err)
+			continue
+		}
+
+		err = service.AddBackupByServer(db, server.Id, database.Backup{
+			ServerId: server.Id,
+			BackupId: uuid.New().String(),
+			Path:     path,
+			SaveTime: time.Now(),
+		})
+		if err != nil {
+			logger.Errorf("Failed to save backup record for server %s: %v\n", server.Id, err)
+			continue
+		}
+
+		logger.Infof("Auto backup for server %s to %s\n", server.Id, path)
+
+		keepDays := server.Save.BackupKeepDays
+		if keepDays == 0 {
+			keepDays = 7
+		}
+		err = tool.CleanOldBackupsByServer(db, server.Id, keepDays)
+		if err != nil {
+			logger.Errorf("Failed to clean old backups for server %s: %v\n", server.Id, err)
+		}
 	}
 }
 
 func PlayerSync(db *bbolt.DB) {
-	logger.Info("Scheduling Player sync...\n")
-	onlinePlayers, err := tool.ShowPlayers()
-	if err != nil {
-		logger.Errorf("%v\n", err)
-	}
-	err = service.PutPlayersOnline(db, onlinePlayers)
-	if err != nil {
-		logger.Errorf("%v\n", err)
-	}
-	logger.Info("Player sync done\n")
+	logger.Info("Scheduling Player sync for all servers...\n")
 
-	playerLogging := viper.GetBool("task.player_logging")
-	if playerLogging {
-		go PlayerLogging(onlinePlayers)
-	}
+	servers := config.GetEnabledServers()
+	for _, server := range servers {
+		logger.Infof("Syncing players for server %s (%s)...\n", server.Name, server.Id)
 
-	kickInterval := viper.GetBool("manage.kick_non_whitelist")
-	if kickInterval {
-		go CheckAndKickPlayers(db, onlinePlayers)
+		onlinePlayers, err := tool.ShowPlayersWithConfig(&server)
+		if err != nil {
+			logger.Errorf("Failed to get online players for server %s: %v\n", server.Id, err)
+			continue
+		}
+
+		err = service.PutPlayersOnlineByServer(db, server.Id, onlinePlayers)
+		if err != nil {
+			logger.Errorf("Failed to save online players for server %s: %v\n", server.Id, err)
+			continue
+		}
+
+		logger.Infof("Player sync done for server %s\n", server.Id)
+
+		playerLogging := viper.GetBool("task.player_logging")
+		if playerLogging {
+			go PlayerLoggingByServer(&server, onlinePlayers)
+		}
+
+		kickInterval := viper.GetBool("manage.kick_non_whitelist")
+		if kickInterval {
+			go CheckAndKickPlayersByServer(db, &server, onlinePlayers)
+		}
 	}
 }
 
@@ -83,10 +103,11 @@ func isPlayerWhitelisted(player database.OnlinePlayer, whitelist []database.Play
 	return false
 }
 
-var playerCache map[string]string
-var firstPoll = true
+// Server-specific player caches
+var playerCaches = make(map[string]map[string]string)
+var firstPolls = make(map[string]bool)
 
-func PlayerLogging(players []database.OnlinePlayer) {
+func PlayerLoggingByServer(server *config.Server, players []database.OnlinePlayer) {
 	loginMsg := viper.GetString("task.player_login_message")
 	logoutMsg := viper.GetString("task.player_logout_message")
 
@@ -96,22 +117,51 @@ func PlayerLogging(players []database.OnlinePlayer) {
 			tmp[player.PlayerUid] = player.Nickname
 		}
 	}
+
+	playerCache, exists := playerCaches[server.Id]
+	if !exists {
+		playerCache = make(map[string]string)
+		playerCaches[server.Id] = playerCache
+	}
+
+	firstPoll, exists := firstPolls[server.Id]
+	if !exists {
+		firstPoll = true
+		firstPolls[server.Id] = true
+	}
+
 	if !firstPoll {
 		for id, name := range tmp {
 			if _, ok := playerCache[id]; !ok {
-				BroadcastVariableMessage(loginMsg, name, len(players))
+				BroadcastVariableMessageByServer(server, loginMsg, name, len(players))
 			}
 		}
 		for id, name := range playerCache {
 			if _, ok := tmp[id]; !ok {
-				BroadcastVariableMessage(logoutMsg, name, len(players))
+				BroadcastVariableMessageByServer(server, logoutMsg, name, len(players))
 			}
 		}
 	}
-	firstPoll = false
-	playerCache = tmp
+	firstPolls[server.Id] = false
+	playerCaches[server.Id] = tmp
 }
 
+func BroadcastVariableMessageByServer(server *config.Server, message string, username string, onlineNum int) {
+	message = strings.ReplaceAll(message, "{username}", username)
+	message = strings.ReplaceAll(message, "{online_num}", strconv.Itoa(onlineNum))
+	message = strings.ReplaceAll(message, "{server_name}", server.Name)
+	arr := strings.Split(message, "\n")
+	for _, msg := range arr {
+		err := tool.BroadcastWithConfig(server, msg)
+		if err != nil {
+			logger.Warnf("Broadcast fail for server %s, %s \n", server.Id, err)
+		}
+		// 连续发送不知道为啥行会错乱, 只能加点延迟
+		time.Sleep(1000 * time.Millisecond)
+	}
+}
+
+// Legacy function for backward compatibility
 func BroadcastVariableMessage(message string, username string, onlineNum int) {
 	message = strings.ReplaceAll(message, "{username}", username)
 	message = strings.ReplaceAll(message, "{online_num}", strconv.Itoa(onlineNum))
@@ -126,36 +176,51 @@ func BroadcastVariableMessage(message string, username string, onlineNum int) {
 	}
 }
 
-func CheckAndKickPlayers(db *bbolt.DB, players []database.OnlinePlayer) {
-	whitelist, err := service.ListWhitelist(db)
+func CheckAndKickPlayersByServer(db *bbolt.DB, server *config.Server, players []database.OnlinePlayer) {
+	whitelist, err := service.ListWhitelistByServer(db, server.Id)
 	if err != nil {
-		logger.Errorf("%v\n", err)
+		logger.Errorf("Failed to get whitelist for server %s: %v\n", server.Id, err)
+		return
 	}
+
 	for _, player := range players {
 		if !isPlayerWhitelisted(player, whitelist) {
 			identifier := player.SteamId
 			if identifier == "" {
-				logger.Warnf("Kicked %s fail, SteamId is empty \n", player.Nickname)
+				logger.Warnf("Kicked %s fail on server %s, SteamId is empty \n", player.Nickname, server.Id)
 				continue
 			}
-			err := tool.KickPlayer(fmt.Sprintf("steam_%s", identifier))
+			err := tool.KickPlayerWithConfig(server, fmt.Sprintf("steam_%s", identifier))
 			if err != nil {
-				logger.Warnf("Kicked %s fail, %s \n", player.Nickname, err)
+				logger.Warnf("Kicked %s fail on server %s, %s \n", player.Nickname, server.Id, err)
 				continue
 			}
-			logger.Warnf("Kicked %s successful \n", player.Nickname)
+			logger.Warnf("Kicked %s successful on server %s \n", player.Nickname, server.Id)
 		}
 	}
-	logger.Info("Check whitelist done\n")
+	logger.Infof("Check whitelist done for server %s\n", server.Id)
 }
 
 func SavSync() {
-	logger.Info("Scheduling Sav sync...\n")
-	err := tool.Decode(viper.GetString("save.path"))
-	if err != nil {
-		logger.Errorf("%v\n", err)
+	logger.Info("Scheduling Sav sync for all servers...\n")
+
+	servers := config.GetEnabledServers()
+	for _, server := range servers {
+		if server.Save.Path == "" {
+			logger.Warnf("Save path not configured for server %s, skipping\n", server.Id)
+			continue
+		}
+
+		logger.Infof("Syncing save for server %s (%s)...\n", server.Name, server.Id)
+
+		err := tool.DecodeWithConfig(&server, server.Save.Path)
+		if err != nil {
+			logger.Errorf("Failed to decode save for server %s: %v\n", server.Id, err)
+			continue
+		}
+
+		logger.Infof("Sav sync done for server %s\n", server.Id)
 	}
-	logger.Info("Sav sync done\n")
 }
 
 func Schedule(db *bbolt.DB) {

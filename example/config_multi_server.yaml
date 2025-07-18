@@ -1,0 +1,102 @@
+web:
+  password: ""
+  port: 8080
+  tls: false
+  cert_path: ""
+  key_path: ""
+  public_url: ""
+
+task:
+  sync_interval: 60
+  player_logging: true
+  player_login_message: "玩家 {username} 加入了服务器 {server_name}！当前在线玩家：{online_num}"
+  player_logout_message: "玩家 {username} 离开了服务器 {server_name}！当前在线玩家：{online_num}"
+
+manage:
+  kick_non_whitelist: false
+
+# 多服务器配置
+servers:
+  - id: "server1"
+    name: "主服务器"
+    description: "主要的游戏服务器，适合新手玩家"
+    enabled: true
+    rcon:
+      address: "127.0.0.1:25575"
+      password: "your_rcon_password_1"
+      use_base64: false
+      timeout: 5
+    rest:
+      address: "http://127.0.0.1:8212"
+      username: "admin"
+      password: "your_rest_password_1"
+      timeout: 5
+    save:
+      path: "/path/to/server1/Pal/Saved"
+      decode_path: ""
+      sync_interval: 120
+      backup_interval: 14400
+      backup_keep_days: 7
+
+  - id: "server2"
+    name: "PVP服务器"
+    description: "PVP专用服务器，适合竞技玩家"
+    enabled: true
+    rcon:
+      address: "127.0.0.1:25576"
+      password: "your_rcon_password_2"
+      use_base64: false
+      timeout: 5
+    rest:
+      address: "http://127.0.0.1:8213"
+      username: "admin"
+      password: "your_rest_password_2"
+      timeout: 5
+    save:
+      path: "/path/to/server2/Pal/Saved"
+      decode_path: ""
+      sync_interval: 120
+      backup_interval: 7200
+      backup_keep_days: 14
+
+  - id: "server3"
+    name: "建筑服务器"
+    description: "创意建筑服务器，专注于建造和创意"
+    enabled: false
+    rcon:
+      address: "127.0.0.1:25577"
+      password: "your_rcon_password_3"
+      use_base64: false
+      timeout: 5
+    rest:
+      address: "http://127.0.0.1:8214"
+      username: "admin"
+      password: "your_rest_password_3"
+      timeout: 5
+    save:
+      path: "/path/to/server3/Pal/Saved"
+      decode_path: ""
+      sync_interval: 300
+      backup_interval: 21600
+      backup_keep_days: 30
+
+# 以下是向后兼容的单服务器配置
+# 如果没有配置servers数组，系统会自动从这里迁移配置
+rcon:
+  address: "127.0.0.1:25575"
+  password: ""
+  use_base64: false
+  timeout: 5
+
+rest:
+  address: "http://127.0.0.1:8212"
+  username: "admin"
+  password: ""
+  timeout: 5
+
+save:
+  path: "/path/to/your/Pal/Saved"
+  decode_path: ""
+  sync_interval: 120
+  backup_interval: 14400
+  backup_keep_days: 7 

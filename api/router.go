@@ -62,8 +62,25 @@ func RegisterRouter(r *gin.Engine) {
 
 	apiGroup := r.Group("/api")
 
+	// Server Management APIs
+	serverGroup := apiGroup.Group("/servers")
+	{
+		serverGroup.GET("", listServers)
+		serverGroup.GET("/:server_id", getServerDetails)
+	}
+
+	// Authenticated Server Management APIs
+	authServerGroup := apiGroup.Group("/servers")
+	authServerGroup.Use(auth.JWTAuthMiddleware())
+	{
+		authServerGroup.POST("", createServer)
+		authServerGroup.PUT("/:server_id", updateServer)
+		authServerGroup.DELETE("/:server_id", deleteServer)
+	}
+
 	anonymousGroup := apiGroup.Group("")
 	{
+		// Legacy single server APIs (backward compatibility)
 		anonymousGroup.GET("/server", getServer)
 		anonymousGroup.GET("/server/tool", getServerTool)
 		anonymousGroup.GET("/server/metrics", getServerMetrics)
@@ -72,11 +89,21 @@ func RegisterRouter(r *gin.Engine) {
 		anonymousGroup.GET("/online_player", listOnlinePlayers)
 		anonymousGroup.GET("/guild", listGuilds)
 		anonymousGroup.GET("/guild/:admin_player_uid", getGuild)
+
+		// Multi-server APIs with optional server_id parameter
+		anonymousGroup.GET("/servers/:server_id/info", getServerInfo)
+		anonymousGroup.GET("/servers/:server_id/metrics", getServerMetricsById)
+		anonymousGroup.GET("/servers/:server_id/players", listPlayersByServer)
+		anonymousGroup.GET("/servers/:server_id/players/:player_uid", getPlayerByServer)
+		anonymousGroup.GET("/servers/:server_id/online_players", listOnlinePlayersByServer)
+		anonymousGroup.GET("/servers/:server_id/guilds", listGuildsByServer)
+		anonymousGroup.GET("/servers/:server_id/guilds/:admin_player_uid", getGuildByServer)
 	}
 
 	authGroup := apiGroup.Group("")
 	authGroup.Use(auth.JWTAuthMiddleware())
 	{
+		// Legacy single server APIs (backward compatibility)
 		authGroup.POST("/server/broadcast", publishBroadcast)
 		authGroup.POST("/server/shutdown", shutdownServer)
 		authGroup.PUT("/player", putPlayers)
@@ -98,5 +125,28 @@ func RegisterRouter(r *gin.Engine) {
 		authGroup.GET("/backup", listBackups)
 		authGroup.GET("/backup/:backup_id", downloadBackup)
 		authGroup.DELETE("/backup/:backup_id", deleteBackup)
+
+		// Multi-server APIs with server_id parameter
+		authGroup.POST("/servers/:server_id/broadcast", publishBroadcastByServer)
+		authGroup.POST("/servers/:server_id/shutdown", shutdownServerByServer)
+		authGroup.PUT("/servers/:server_id/players", putPlayersByServer)
+		authGroup.POST("/servers/:server_id/players/:player_uid/kick", kickPlayerByServer)
+		authGroup.POST("/servers/:server_id/players/:player_uid/ban", banPlayerByServer)
+		authGroup.POST("/servers/:server_id/players/:player_uid/unban", unbanPlayerByServer)
+		authGroup.PUT("/servers/:server_id/guilds", putGuildsByServer)
+		authGroup.POST("/servers/:server_id/sync", syncDataByServer)
+		authGroup.GET("/servers/:server_id/whitelist", listWhiteByServer)
+		authGroup.POST("/servers/:server_id/whitelist", addWhiteByServer)
+		authGroup.DELETE("/servers/:server_id/whitelist", removeWhiteByServer)
+		authGroup.PUT("/servers/:server_id/whitelist", putWhiteByServer)
+		authGroup.GET("/servers/:server_id/rcon", listRconCommandByServer)
+		authGroup.POST("/servers/:server_id/rcon", addRconCommandByServer)
+		authGroup.POST("/servers/:server_id/rcon/import", importRconCommandsByServer)
+		authGroup.POST("/servers/:server_id/rcon/send", sendRconCommandByServer)
+		authGroup.PUT("/servers/:server_id/rcon/:uuid", putRconCommandByServer)
+		authGroup.DELETE("/servers/:server_id/rcon/:uuid", removeRconCommandByServer)
+		authGroup.GET("/servers/:server_id/backups", listBackupsByServer)
+		authGroup.GET("/servers/:server_id/backups/:backup_id", downloadBackupByServer)
+		authGroup.DELETE("/servers/:server_id/backups/:backup_id", deleteBackupByServer)
 	}
 }

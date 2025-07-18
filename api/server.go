@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/zaigie/palworld-server-tool/internal/config"
 	"github.com/zaigie/palworld-server-tool/internal/logger"
 	"github.com/zaigie/palworld-server-tool/internal/tool"
 )
@@ -37,6 +38,15 @@ type ServerToolResponse struct {
 	Latest  string `json:"latest"`
 }
 
+// getDefaultServer returns the default server configuration for backward compatibility
+func getDefaultServer() (*config.Server, error) {
+	servers := config.GetEnabledServers()
+	if len(servers) == 0 {
+		return nil, errors.New("no servers configured")
+	}
+	return &servers[0], nil
+}
+
 // getServerTool godoc
 //
 //	@Summary		Get PalWorld Server Tool
@@ -67,7 +77,7 @@ func getServerTool(c *gin.Context) {
 // getServer godoc
 //
 //	@Summary		Get Server Info
-//	@Description	Get Server Info
+//	@Description	Get Server Info (Legacy - uses default server)
 //	@Tags			Server
 //	@Accept			json
 //	@Produce		json
@@ -75,19 +85,24 @@ func getServerTool(c *gin.Context) {
 //	@Failure		400	{object}	ErrorResponse
 //	@Router			/api/server [get]
 func getServer(c *gin.Context) {
-	info, err := tool.Info()
+	server, err := getDefaultServer()
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	// TODO: add system psutil info
+
+	info, err := tool.InfoWithConfig(server)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	c.JSON(http.StatusOK, &ServerInfo{info["version"], info["name"]})
 }
 
 // getServerMetrics godoc
 //
 //	@Summary		Get Server Metrics
-//	@Description	Get Server Metrics
+//	@Description	Get Server Metrics (Legacy - uses default server)
 //	@Tags			Server
 //	@Accept			json
 //	@Produce		json
@@ -95,7 +110,13 @@ func getServer(c *gin.Context) {
 //	@Failure		400	{object}	ErrorResponse
 //	@Router			/api/server/metrics [get]
 func getServerMetrics(c *gin.Context) {
-	metrics, err := tool.Metrics()
+	server, err := getDefaultServer()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	metrics, err := tool.MetricsWithConfig(server)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -113,7 +134,7 @@ func getServerMetrics(c *gin.Context) {
 // publishBroadcast godoc
 //
 //	@Summary		Publish Broadcast
-//	@Description	Publish Broadcast
+//	@Description	Publish Broadcast (Legacy - uses default server)
 //	@Tags			Server
 //	@Accept			json
 //	@Produce		json
@@ -125,6 +146,12 @@ func getServerMetrics(c *gin.Context) {
 //	@Failure		401			{object}	ErrorResponse
 //	@Router			/api/server/broadcast [post]
 func publishBroadcast(c *gin.Context) {
+	server, err := getDefaultServer()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	var req BroadcastRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -134,7 +161,7 @@ func publishBroadcast(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := tool.Broadcast(req.Message); err != nil {
+	if err := tool.BroadcastWithConfig(server, req.Message); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -144,7 +171,7 @@ func publishBroadcast(c *gin.Context) {
 // shutdownServer godoc
 //
 //	@Summary		Shutdown Server
-//	@Description	Shutdown Server
+//	@Description	Shutdown Server (Legacy - uses default server)
 //	@Tags			Server
 //	@Accept			json
 //	@Produce		json
@@ -156,6 +183,12 @@ func publishBroadcast(c *gin.Context) {
 //	@Failure		401			{object}	ErrorResponse
 //	@Router			/api/server/shutdown [post]
 func shutdownServer(c *gin.Context) {
+	server, err := getDefaultServer()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	var req ShutdownRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -168,7 +201,7 @@ func shutdownServer(c *gin.Context) {
 	if req.Seconds == 0 {
 		req.Seconds = 60
 	}
-	if err := tool.Shutdown(req.Seconds, req.Message); err != nil {
+	if err := tool.ShutdownWithConfig(server, req.Seconds, req.Message); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

@@ -14,6 +14,7 @@ import (
 	"github.com/zaigie/palworld-server-tool/internal/logger"
 
 	"github.com/spf13/viper"
+	"github.com/zaigie/palworld-server-tool/internal/config"
 	"github.com/zaigie/palworld-server-tool/internal/database"
 )
 
@@ -25,6 +26,38 @@ func callApi(method string, api string, param []byte) ([]byte, error) {
 	user := viper.GetString("rest.username")
 	pass := viper.GetString("rest.password")
 	timeout := viper.GetInt("rest.timeout")
+
+	api, err := url.JoinPath(addr, api)
+	if err != nil {
+		return nil, err
+	}
+
+	req, _ := http.NewRequest(method, api, bytes.NewReader(param))
+	req.SetBasicAuth(user, pass)
+
+	client.Timeout = time.Duration(timeout) * time.Second
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("rest: %d %s", resp.StatusCode, b)
+	}
+	return b, nil
+}
+
+// callApiWithConfig calls API with specific server configuration
+func callApiWithConfig(serverConfig *config.Server, method string, api string, param []byte) ([]byte, error) {
+	addr := serverConfig.Rest.Address
+	user := serverConfig.Rest.Username
+	pass := serverConfig.Rest.Password
+	timeout := serverConfig.Rest.Timeout
 
 	api, err := url.JoinPath(addr, api)
 	if err != nil {
@@ -74,6 +107,23 @@ func Info() (map[string]string, error) {
 	return result, nil
 }
 
+func InfoWithConfig(serverConfig *config.Server) (map[string]string, error) {
+	resp, err := callApiWithConfig(serverConfig, "GET", "/v1/api/info", nil)
+	if err != nil {
+		return nil, err
+	}
+	var data ResponseInfo
+	err = json.Unmarshal(resp, &data)
+	if err != nil {
+		return nil, err
+	}
+	result := map[string]string{
+		"version": data.Version,
+		"name":    data.ServerName,
+	}
+	return result, nil
+}
+
 type ResponseMetrics struct {
 	ServerFps        int     `json:"serverfps"`
 	CurrentPlayerNum int     `json:"currentplayernum"`
@@ -85,6 +135,27 @@ type ResponseMetrics struct {
 
 func Metrics() (map[string]interface{}, error) {
 	resp, err := callApi("GET", "/v1/api/metrics", nil)
+	if err != nil {
+		return nil, err
+	}
+	var data ResponseMetrics
+	err = json.Unmarshal(resp, &data)
+	if err != nil {
+		return nil, err
+	}
+	result := map[string]interface{}{
+		"server_fps":         data.ServerFps,
+		"current_player_num": data.CurrentPlayerNum,
+		"server_frame_time":  float64(int64(data.ServerFrameTime*100+0.5)) / 100,
+		"max_player_num":     data.MaxPlayerNum,
+		"uptime":             data.Uptime,
+		"days":               data.Days,
+	}
+	return result, nil
+}
+
+func MetricsWithConfig(serverConfig *config.Server) (map[string]interface{}, error) {
+	resp, err := callApiWithConfig(serverConfig, "GET", "/v1/api/metrics", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -132,6 +203,36 @@ func ShowPlayers() ([]database.OnlinePlayer, error) {
 	onlinePlayers := make([]database.OnlinePlayer, 0)
 	for _, player := range data.Players {
 		onlinePlayer := database.OnlinePlayer{
+			ServerId:   config.GetDefaultServerId(),
+			PlayerUid:  getPlayerUid(player.PlayerId),
+			SteamId:    getSteamId(player.UserId),
+			Nickname:   player.Name,
+			Ip:         player.Ip,
+			Ping:       player.Ping,
+			LocationX:  player.LocationX,
+			LocationY:  player.LocationY,
+			Level:      int32(player.Level),
+			LastOnline: time.Now(),
+		}
+		onlinePlayers = append(onlinePlayers, onlinePlayer)
+	}
+	return onlinePlayers, nil
+}
+
+func ShowPlayersWithConfig(serverConfig *config.Server) ([]database.OnlinePlayer, error) {
+	resp, err := callApiWithConfig(serverConfig, "GET", "/v1/api/players", nil)
+	if err != nil {
+		return nil, err
+	}
+	var data ResponsePlayers
+	err = json.Unmarshal(resp, &data)
+	if err != nil {
+		return nil, err
+	}
+	onlinePlayers := make([]database.OnlinePlayer, 0)
+	for _, player := range data.Players {
+		onlinePlayer := database.OnlinePlayer{
+			ServerId:   serverConfig.Id,
 			PlayerUid:  getPlayerUid(player.PlayerId),
 			SteamId:    getSteamId(player.UserId),
 			Nickname:   player.Name,
@@ -186,6 +287,20 @@ func KickPlayer(steamId string) error {
 	return nil
 }
 
+func KickPlayerWithConfig(serverConfig *config.Server, steamId string) error {
+	b, err := json.Marshal(RequestUserId{
+		UserId: steamId,
+	})
+	if err != nil {
+		return err
+	}
+	_, err = callApiWithConfig(serverConfig, "POST", "/v1/api/kick", b)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func BanPlayer(steamId string) error {
 	b, err := json.Marshal(RequestUserId{
 		UserId: steamId,
@@ -194,6 +309,20 @@ func BanPlayer(steamId string) error {
 		return err
 	}
 	_, err = callApi("POST", "/v1/api/ban", b)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func BanPlayerWithConfig(serverConfig *config.Server, steamId string) error {
+	b, err := json.Marshal(RequestUserId{
+		UserId: steamId,
+	})
+	if err != nil {
+		return err
+	}
+	_, err = callApiWithConfig(serverConfig, "POST", "/v1/api/ban", b)
 	if err != nil {
 		return err
 	}
@@ -214,6 +343,20 @@ func UnBanPlayer(steamId string) error {
 	return nil
 }
 
+func UnBanPlayerWithConfig(serverConfig *config.Server, steamId string) error {
+	b, err := json.Marshal(RequestUserId{
+		UserId: steamId,
+	})
+	if err != nil {
+		return err
+	}
+	_, err = callApiWithConfig(serverConfig, "POST", "/v1/api/unban", b)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 type RequestBroadcast struct {
 	Message string `json:"message"`
 }
@@ -226,6 +369,20 @@ func Broadcast(message string) error {
 		return err
 	}
 	_, err = callApi("POST", "/v1/api/announce", b)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func BroadcastWithConfig(serverConfig *config.Server, message string) error {
+	b, err := json.Marshal(RequestBroadcast{
+		Message: message,
+	})
+	if err != nil {
+		return err
+	}
+	_, err = callApiWithConfig(serverConfig, "POST", "/v1/api/announce", b)
 	if err != nil {
 		return err
 	}
@@ -252,8 +409,31 @@ func Shutdown(seconds int, message string) error {
 	return nil
 }
 
+func ShutdownWithConfig(serverConfig *config.Server, seconds int, message string) error {
+	b, err := json.Marshal(RequestShutdown{
+		Waittime: seconds,
+		Message:  message,
+	})
+	if err != nil {
+		return err
+	}
+	_, err = callApiWithConfig(serverConfig, "POST", "/v1/api/shutdown", b)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func DoExit() error {
 	_, err := callApi("POST", "/v1/api/stop", nil)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func DoExitWithConfig(serverConfig *config.Server) error {
+	_, err := callApiWithConfig(serverConfig, "POST", "/v1/api/stop", nil)
 	if err != nil {
 		return err
 	}
