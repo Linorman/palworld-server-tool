@@ -32,8 +32,10 @@ import skillMap from "@/assets/skill.json";
 import PlayerList from "./component/PlayerList.vue";
 import GuildList from "./component/GuildList.vue";
 import MapView from "./component/MapView.vue";
+import ServerSelector from "./component/ServerSelector.vue";
 import whitelistStore from "@/stores/model/whitelist";
 import playerToGuildStore from "@/stores/model/playerToGuild";
+import serverStore from "@/stores/model/server";
 import { watch } from "vue";
 import userStore from "@/stores/model/user";
 import { h } from "vue";
@@ -67,6 +69,30 @@ const authToken = ref("");
 const isDarkMode = ref(
   window.matchMedia("(prefers-color-scheme: dark)").matches
 );
+
+// 服务器相关
+const currentServer = computed(() => serverStore().getCurrentServer());
+const currentServerId = computed(() => currentServer.value?.id || null);
+
+// 监听当前服务器变化，重新加载数据
+watch(currentServerId, async (newServerId, oldServerId) => {
+  if (newServerId && newServerId !== oldServerId) {
+    loading.value = true;
+    try {
+      await Promise.all([
+        getServerInfo(),
+        getServerMetrics(),
+        getPlayerList(),
+        getWhiteList(),
+        getBackupList()
+      ]);
+    } catch (error) {
+      console.error('Failed to load server data:', error);
+    } finally {
+      loading.value = false;
+    }
+  }
+});
 
 const updateDarkMode = (e) => {
   isDarkMode.value = e.matches;
@@ -143,12 +169,12 @@ const isNewVersion = (version, latest) => {
 
 // get data
 const getServerInfo = async () => {
-  const { data } = await new ApiService().getServerInfo();
+  const { data } = await new ApiService().getServerInfo(currentServerId.value);
   serverInfo.value = data.value;
 };
 
 const getServerMetrics = async () => {
-  const { data } = await new ApiService().getServerMetrics();
+  const { data } = await new ApiService().getServerMetrics(currentServerId.value);
   serverMetrics.value = data.value;
 };
 
@@ -157,7 +183,7 @@ const getPlayerList = async () => {
   const { data } = await new ApiService().getPlayerList({
     order_by: "last_online",
     desc: true,
-  });
+  }, currentServerId.value);
   playerList.value = data.value;
   rconPlayerOptions.value = data.value.map((item) => {
     return {
@@ -167,7 +193,7 @@ const getPlayerList = async () => {
   });
 };
 const getOnlineList = async () => {
-  const { data } = await new ApiService().getOnlinePlayerList();
+  const { data } = await new ApiService().getOnlinePlayerList(currentServerId.value);
   onlinePlayerList.value = data.value;
 };
 
@@ -238,7 +264,7 @@ const handleRconDrawer = () => {
 };
 const getRconCommands = async () => {
   if (checkAuthToken()) {
-    const { data, statusCode } = await new ApiService().getRconCommands();
+    const { data, statusCode } = await new ApiService().getRconCommands(currentServerId.value);
     if (statusCode.value === 200) {
       rconCommands.value = data.value;
       rconCommands.value.forEach((item) => {
@@ -253,7 +279,7 @@ const sendRconCommand = async (uuid) => {
     const { data, statusCode } = await new ApiService().sendRconCommand({
       uuid,
       content,
-    });
+    }, currentServerId.value);
     if (statusCode.value === 200) {
       message.info(data.value?.message);
     } else {
@@ -291,7 +317,7 @@ const addRconCommand = async () => {
       command: newRconCommand.value,
       placeholder: newRconPlaceholder.value,
       remark: newRconRemark.value,
-    });
+    }, currentServerId.value);
     if (statusCode.value === 200) {
       message.success(t("message.addrconsuccess"));
       await getRconCommands();
@@ -305,7 +331,7 @@ const addRconCommand = async () => {
 };
 const removeRconCommand = async (uuid) => {
   if (checkAuthToken()) {
-    const { data, statusCode } = await new ApiService().removeRconCommand(uuid);
+    const { data, statusCode } = await new ApiService().removeRconCommand(uuid, currentServerId.value);
     if (statusCode.value === 200) {
       message.success(t("message.removerconsuccess"));
       await getRconCommands();
@@ -422,7 +448,7 @@ const handleWhiteList = () => {
 };
 const getWhiteList = async () => {
   if (checkAuthToken()) {
-    const { data, statusCode } = await new ApiService().getWhitelist();
+    const { data, statusCode } = await new ApiService().getWhitelist(currentServerId.value);
     if (statusCode.value === 200) {
       if (data.value) {
         whitelistStore().setWhitelist(data.value);
@@ -461,7 +487,7 @@ const removeWhiteList = async (player) => {
     );
     whiteList.value.splice(index, 1);
   } else {
-    const { data, statusCode } = await new ApiService().removeWhitelist(player);
+    const { data, statusCode } = await new ApiService().removeWhitelist(player, currentServerId.value);
     if (statusCode.value === 200) {
       message.success(t("message.removewhitesuccess"));
       await getWhiteList();
@@ -488,7 +514,8 @@ const putWhiteList = async () => {
   }
   const whiteListData = JSON.stringify(whiteList.value);
   const { data, statusCode } = await new ApiService().putWhitelist(
-    whiteListData
+    whiteListData,
+    currentServerId.value
   );
   if (statusCode.value === 200) {
     message.success(t("message.addwhitesuccess"));
@@ -518,7 +545,7 @@ const handleStartBrodcast = () => {
 const handleBroadcast = async () => {
   const { data, statusCode } = await new ApiService().sendBroadcast({
     message: broadcastText.value,
-  });
+  }, currentServerId.value);
   if (statusCode.value === 200) {
     message.success(t("message.broadcastsuccess"));
     showBroadcastModal.value = false;
@@ -532,7 +559,7 @@ const doShutdown = async () => {
   return await new ApiService().shutdownServer({
     seconds: 60,
     message: "Server Will Shutdown After 60 Seconds",
-  });
+  }, currentServerId.value);
 };
 
 // 关机
@@ -634,7 +661,7 @@ const getBackupList = async () => {
     const { data, statusCode } = await new ApiService().getBackupList({
       startTime: range.value[0],
       endTime: range.value[1],
-    });
+    }, currentServerId.value);
     if (statusCode.value === 200) {
       backupList.value = data.value;
     }
@@ -647,7 +674,7 @@ const getBackupListWithRange = async (selectRange) => {
     const { data, statusCode } = await new ApiService().getBackupList({
       startTime,
       endTime,
-    });
+    }, currentServerId.value);
     if (statusCode.value === 200) {
       backupList.value = data.value;
     }
@@ -707,7 +734,8 @@ const removeBackup = async (item) => {
   if (checkAuthToken()) {
     isDownloading.value = true;
     const { data, statusCode } = await new ApiService().removeBackup(
-      item.backup_id
+      item.backup_id,
+      currentServerId.value
     );
     if (statusCode.value === 200) {
       message.success(t("message.removebackupsuccess"));
@@ -724,7 +752,7 @@ const downloadBackup = async (item) => {
     isDownloading.value = true;
     try {
       const { data: blobData, execute: fetchBlob } =
-        await new ApiService().downloadBackup(item.backup_id);
+        await new ApiService().downloadBackup(item.backup_id, currentServerId.value);
       await fetchBlob();
       const url = URL.createObjectURL(blobData.value);
       const link = document.createElement("a");
@@ -885,9 +913,15 @@ onMounted(async () => {
         </n-tag>
       </n-space>
     </div>
+    
+    <!-- 服务器选择器 -->
+    <div class="px-3 py-2" :class="isDarkMode ? 'bg-#18181c border-b border-#333' : 'bg-#f5f5f5 border-b border-#e0e0e0'">
+      <server-selector />
+    </div>
+    
     <div class="w-full">
       <div class="rounded-lg" v-if="!loading">
-        <n-layout style="height: calc(100vh - 64px)">
+        <n-layout style="height: calc(100vh - 120px)">
           <n-layout-header class="p-3 flex justify-between h-16" bordered>
             <n-button-group :size="smallScreen ? 'medium' : 'large'">
               <n-button
