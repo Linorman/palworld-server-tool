@@ -5,16 +5,16 @@
 </p>
 
 <p align='center'>
-  通过可视化界面及 REST 接口管理幻兽帕鲁专用服务器，基于 SAV 存档文件解析及 REST&RCON 实现<br/>
-  并且花了很漫长且枯燥的时间去做了国际化...
+  本项目是基于源项目而修改，增加了多服务器管理的功能，方便管理多台幻兽帕鲁服务器。
 </p>
 
-<p align='center'>
-<img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/zaigie/palworld-server-tool?style=for-the-badge">&nbsp;&nbsp;
-<img alt="Go" src="https://img.shields.io/badge/Go-00ADD8?style=for-the-badge&logo=go&logoColor=white">&nbsp;&nbsp;
-<img alt="Python" src="https://img.shields.io/badge/Python-FFD43B?style=for-the-badge&logo=python&logoColor=blue">&nbsp;&nbsp;
-<img alt="Vue" src="https://img.shields.io/badge/Vue%20js-35495E?style=for-the-badge&logo=vuedotjs&logoColor=4FC08D">
-</p>
+## Build简述
+```
+# 确保安装了所有所需要的环境依赖，详细以来请参考源项目
+chmod +x build.sh
+./build.sh
+```
+
 
 ![PC](./docs/img/pst-zh-1.png)
 
