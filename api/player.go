@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"github.com/zaigie/palworld-server-tool/internal/config"
 	"net/http"
 	"sort"
 
@@ -30,7 +31,16 @@ const (
 //	@Failure		400	{object}	ErrorResponse
 //	@Router			/api/online_player [get]
 func listOnlinePlayers(c *gin.Context) {
-	onlinePLayers, err := tool.ShowPlayers()
+	// In multi-server mode, use the first enabled server's configuration
+	enabledServers := config.GetEnabledServers()
+	if len(enabledServers) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No enabled servers found"})
+		return
+	}
+
+	// Use the first enabled server for backward compatibility
+	server := enabledServers[0]
+	onlinePLayers, err := tool.ShowPlayersWithConfig(&server)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
