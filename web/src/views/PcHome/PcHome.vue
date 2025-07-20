@@ -811,6 +811,19 @@ onMounted(async () => {
   skillTypeList.value = getSkillTypeList();
   loading.value = true;
   checkAuthToken();
+  
+  // 首先加载服务器列表
+  try {
+    const { data } = await new ApiService().getServers();
+    if (data.value && data.value.servers) {
+      serverStore().setServers(data.value.servers);
+    }
+  } catch (error) {
+    console.error('Failed to load servers:', error);
+    message.error('加载服务器列表失败');
+  }
+  
+  // 然后加载其他数据
   getServerInfo();
   getServerMetrics();
   getServerToolInfo();

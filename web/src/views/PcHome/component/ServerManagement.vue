@@ -154,8 +154,8 @@ const loadServers = async () => {
   try {
     loading.value = true;
     const { data } = await apiService.getServers();
-    if (data.value) {
-      serverStore().setServers(data.value);
+    if (data.value && data.value.servers) {
+      serverStore().setServers(data.value.servers);
     }
   } catch (error) {
     message.error('加载服务器列表失败');
