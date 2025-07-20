@@ -32,7 +32,6 @@ cd ..
 # 准备资源文件
 echo "📁 准备资源文件..."
 mkdir -p assets
-cp -r web/dist/* assets/
 cp -r pal-conf/dist/assets/* assets/
 cp pal-conf/dist/index.html pal-conf.html
 
